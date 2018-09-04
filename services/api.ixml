@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE ixml SYSTEM "https://developers.zeyos.com/schema/ixml.dtd">
+<ixml
+	xmlns="https://developers.zeyos.com/schema/ixml"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="https://developers.zeyos.com/schema/ixml https://developers.zeyos.com/schema/ixml.xsd">
+
+<rest:server>
+	<rest:resource method="POST" route="/:campaign" var_body="body">
+		<try>
+			<if value1="$body">
+				<return />
+			</if>
+
+			<decode:json var="data">$body</decode:json>
+			<debug:log>Request body: $body</debug:log>
+
+			<array var="form" />
+			<foreach var="data.form_response.definition.fields" var_value="field">
+				<foreach var="data.form_response.answers" var_value="answer">
+					<if value1="$field.id" value2="$answer.field.id">
+						<assign var="field.answer" var_source="answer[$answer.type]" />
+						<assign var="form[]" var_source="field" />
+
+						<concat var="description">$field.title&n;&n;</concat>
+						<switch value="$field.type">
+							<case value="yes_no">
+								<is var="field.answer" type="true">
+									<concat var="description">* Yes&n;&n;</concat>
+								<else>
+									<concat var="description">* No&n;&n;</concat>
+								</else>
+								</is>
+							</case>
+							<case value="picture_choice">
+								<concat var="description">* $field.answer.label&n;&n;</concat>
+							</case>
+							<case value="multiple_choice">
+								<foreach var="field.answer.labels" var_value="value">
+									<concat var="description">* $value&n;</concat>
+								</foreach>
+								<concat var="description">&n;</concat>
+							</case>
+							<default>
+								<concat var="description">* $field.answer&n;&n;</concat>
+							</default>
+						</switch>
+
+						<!-- The first field represents the sender's name -->
+						<if value1="$name">
+							<set var="name">$field.answer</set>
+						</if>
+						<break />
+					</if>
+				</foreach>
+			</foreach>
+
+			<trim var="description">$description</trim>
+
+			<db:get entity="campaigns" id="$campaign" var="campaign" />
+			<if value1="$campaign.ID">
+				<error>Campaign not found</error>
+			</if>
+
+			<debug:log>
+				<encode:json var="form" />
+			</debug:log>
+
+			<db:transaction>
+				<numformat:get name="opportunitynum" var="opportunitynum" />
+				<numformat:inc name="opportunitynum" />
+
+				<db:set entity="opportunities" var="ID">
+					<db:data field="name">$campaign.name: $name</db:data>
+					<db:data field="campaign">$campaign.ID</db:data>
+					<db:data field="opportunitynum">$opportunitynum</db:data>
+					<db:data field="duedate">$($DATENOW + 86400 * 7)</db:data>
+					<db:data field="status">2</db:data>
+					<db:data field="priority">3</db:data>
+					<db:data field="description">$description</db:data>
+				</db:set>
+
+				<extdata:set entity="opportunities" id="$ID">
+					<extdata:data field="form">
+						<encode:json var="form" />
+					</extdata:data>
+				</extdata:set>
+		
+				<db:set entity="records">
+					<db:data field="entity">opportunities</db:data>
+					<db:data field="index">$ID</db:data>
+					<db:data field="sender">Typeform</db:data>
+					<db:data field="text">**NEW SIGNUP for Webinar $campaign.name:**&n;&n;$description</db:data>
+				</db:set>
+				
+				<db:insert table="tags">
+					<db:data field="entity">opportunities</db:data>
+					<db:data field="index">$ID</db:data>
+					<db:data field="name">Webinar</db:data>
+				</db:insert>
+
+				<db:insert table="tags">
+					<db:data field="entity">opportunities</db:data>
+					<db:data field="index">$ID</db:data>
+					<db:data field="name">Webinar/$campaign.name</db:data>
+				</db:insert>
+			</db:transaction>
+		<catch var="err">
+			<!-- Error handling... -->
+			<debug:log>Error: $err</debug:log>
+			<error>$err</error>
+		</catch>
+		</try>
+	</rest:resource>
+</rest:server>
+
+</ixml>
+

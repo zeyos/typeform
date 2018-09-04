@@ -1,0 +1,13 @@
+{
+  "services": {
+    "api": {
+      "mimetype": "application/ixml+xml",
+      "name": "REST API",
+      "type": "remotecall",
+      "schedule": 0,
+      "interval": 1,
+      "entity": "",
+      "url": ""
+    }
+  }
+}
